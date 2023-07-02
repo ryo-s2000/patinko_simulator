@@ -13,13 +13,19 @@ pub struct Model {
     pub price: usize,
     pub jackpot_probability: usize,
     pub jackpot_probability_division: JackpotProbabilityDivision,
-    pub jackpot_pay_out_average: usize, // TODO ST mode
     pub roll_count_within_thousand: usize,
     pub roll_per_cost: f64,
+    pub st_rush_percentage: f64,
+    pub st_probability: f64,
+    pub st_trials: usize,
+    pub st_bonus: usize,
 }
 
 impl Model {
-    pub fn new(name: String, maker: String, price: usize, jackpot_probability: usize, jackpot_pay_out_average: usize, roll_count_within_thousand: usize) -> Self {
+    pub fn new(
+        name: String, maker: String, price: usize, jackpot_probability: usize,
+        roll_count_within_thousand: usize, st_rush_percentage: f64, st_probability: f64, st_trials: usize, st_bonus: usize,
+    ) -> Self {
         let jackpot_probability_division= match jackpot_probability {
             251..=1000 => JackpotProbabilityDivision::Middle,
             151..=250 => JackpotProbabilityDivision::LightMiddle,
@@ -33,9 +39,12 @@ impl Model {
             price,
             jackpot_probability,
             jackpot_probability_division,
-            jackpot_pay_out_average,
             roll_count_within_thousand,
             roll_per_cost: 1000.0/roll_count_within_thousand as f64,
+            st_rush_percentage,
+            st_probability,
+            st_trials,
+            st_bonus,
         }
     }
 }
