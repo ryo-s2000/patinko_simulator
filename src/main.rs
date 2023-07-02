@@ -8,14 +8,14 @@ use thousands::Separable;
 static MAX_TRAIAL: usize = 600;
 
 fn main() {
-    let trials = 12;
+    let trials = 120;
 
     let eva15_6 = Model::new(
         "新世紀エヴァンゲリオン〜未来への咆哮〜".to_string(),
         "ビスティ".to_string(),
         4,
         319,
-        8*2,
+        9*2,
         70.0,
         99.4,
         163,
