@@ -49,6 +49,7 @@ name = "patinko_simulator"
 version = "0.1.0"
 dependencies = [
  "rand",
+ "thousands",
 ]
 
 [[package]]
@@ -165,6 +166,12 @@ checksum = "678054eb77286b51581ba43620cc911abf02758c91f93f479767aed0f90458b2"
 dependencies = [
  "rand_core 0.3.1",
 ]
+
+[[package]]
+name = "thousands"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3bf63baf9f5039dadc247375c29eb13706706cfde997d0330d05aa63a77d8820"
 
 [[package]]
 name = "winapi"
