@@ -1,5 +1,6 @@
-// 初当たり
+use std::collections::HashMap;
 
+// 初当たり
 pub enum JackpotProbabilityDivision {
     Middle,
     LightMiddle,
@@ -7,6 +8,9 @@ pub enum JackpotProbabilityDivision {
     Ama
 }
 
+// 時短は考慮せずに、実質突入率を計算すること
+// TODO ラウンドごとの確率変更、出玉変更設定
+// TODO 回転数は正規分布する
 pub struct Model {
     pub name: String,
     pub maker: String,
@@ -19,6 +23,7 @@ pub struct Model {
     pub st_probability: f64,
     pub st_trials: usize,
     pub st_bonus: usize,
+    pub jackpot_counts: Option<Vec<HashMap<String, Vec<usize>>>>
 }
 
 impl Model {
@@ -45,6 +50,8 @@ impl Model {
             st_probability,
             st_trials,
             st_bonus,
+            jackpot_counts: None,
         }
     }
 }
+// TODO 遊タイム
