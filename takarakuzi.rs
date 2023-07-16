@@ -19,8 +19,10 @@ impl Channeles {
 
     pub fn send_end_signal(&self) {
         for s in &self.sender_list {
-            // rxがdropされるのでエラーが発生する
-            s.send("end".to_string()).unwrap();
+            // 条件が揃って処理が終了したthreadのrxがdropされるのでエラーが発生する
+            match s.send("end".to_string()) {
+                Ok(_) => (), Err(_) => (),
+            };
         }
     }
 }
@@ -61,7 +63,7 @@ fn exec(id: u8, core: u8, rx: Receiver<String>, end_tx: Sender<String>) {
 
         count += 1;
 
-        if sikou(n) && sikou(n-1) && sikou(n-2) && sikou(n-3) && sikou(n-4) && sikou(n-5) {
+        if sikou(n) && sikou(n-1) && sikou(n-2) && sikou(n-3) && sikou(n-4) {
             let expected_count = count * core as u128;
             println!("-------------------------- ID:{} count = {} 買うのに必要な金額 {}円 --------------------------",
                 id,
