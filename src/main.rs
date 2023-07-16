@@ -3,60 +3,52 @@ use rand::Rng;
 
 mod model;
 use model::Model;
-
+use model::eva15_6;
 mod user;
 use user::User;
 
 use thousands::Separable;
 use std::collections::HashMap;
-
-static MAX_TRAIAL: usize = 6000;
+use std::thread;
 
 fn main() {
-    let trials = 3*4*12;
+    let trials: usize = 3*4*12;
 
-    let user_1: User = User::new("拘利無蔵".to_string());
-    let user_2: User = User::new("P好太郎".to_string());
+    let user_1: User = User::new("拘利無蔵".to_string(), 100);
+    let user_2: User = User::new("P好太郎".to_string(), 300);
 
-    let code_6 = Model::new(
-        "P コードギアス 反逆のルルーシュ Rebellion to Re;surrection".to_string(),
-        "ビスティ".to_string(),
-        1,
-        319,
-        18*5,
-        60.1 + 1.2,
-        7.5 - 0.4,
-        11,
-        770,
-    );
+    let mut thread_handlers = vec![];
 
-    let eva15_6 = Model::new(
-        "新世紀エヴァンゲリオン〜未来への咆哮〜".to_string(),
-        "ビスティ".to_string(),
-        4,
-        319,
-        8*2,
-        70.0,
-        99.4,
-        163,
-        1500,
-    );
+    let eva15_01 = eva15_6();
 
-    exec_and_print(user_1, code_6, trials);
-    exec_and_print(user_2, eva15_6, trials);
+    for mut user in [user_1, user_2] {
+        let selected_model = &eva15_01;
+        let m = selected_model.clone();
+        thread_handlers.push(
+            thread::spawn(
+                move || exec_and_print(&mut user, &mut m.lock().unwrap(), trials)
+            )
+        );
+    }
+
+    for handle in thread_handlers {
+        handle.join().unwrap();
+    }
 }
 
-fn exec_and_print(mut user: User, mut model: Model, trials: usize) {
+fn exec_and_print(mut user: &mut User, mut model: &mut Model, trials: usize) {
     // 遊戯開始、初当たりするまで回す
     let mut game_counts_until_first_win = Vec::new();
     for _ in 0..trials {
-        let game_count = exec_until_first_win(model.jackpot_probability);
-        game_counts_until_first_win.push(game_count);
+        let (game_count, win) = exec_until_first_win(&mut model, user.max_traials);
+        if win {
+            game_counts_until_first_win.push((game_count, win));
+        }
     }
     game_counts_until_first_win.sort();
 
     // 初当たり、STモード結果をmodelに保存
-    let total_balance = exec_st_and_cal_pay_out_ball(&mut model, &game_counts_until_first_win);
+    let total_balance = exec_st_and_cal_pay_out_ball(&mut model, &game_counts_until_first_win, user.max_traials);
     user.balance = total_balance as isize;
 
     // 台スペック
@@ -64,15 +56,11 @@ fn exec_and_print(mut user: User, mut model: Model, trials: usize) {
 
     // 個人の結果
     println!("\n--------------{} 結果発表--------------", user.name);
-    let sum = &game_counts_until_first_win.iter().sum::<usize>();
+    let sum = &game_counts_until_first_win.iter().map(|x| x.0).sum::<usize>();
     let average = sum / &game_counts_until_first_win.len();
-    println!("min回転 = {}", &game_counts_until_first_win[0]);
-    println!("max回転 = {}", &game_counts_until_first_win[&game_counts_until_first_win.len()-1]);
-    println!("average回転 = {}", average);
+    println!("平均初当たり時回転数 = {}", average);
     let sign = if user.balance > 0 {"+"} else {""};
     println!("最終収支 {}{}円", sign, user.balance.separate_with_commas());
-    let random_r = &game_counts_until_first_win[rand::thread_rng().gen_range(0, trials)];
-    print_with_color((random_r/model.jackpot_probability)+1, format!("Todays Game First Jackpot count = {}\n", random_r));
 
     // 台の結果
     println!("\n--------------当たり履歴--------------");
@@ -81,63 +69,62 @@ fn exec_and_print(mut user: User, mut model: Model, trials: usize) {
     println!("\n");
 }
 
-fn exec_until_first_win(jackpot_probability: usize) -> usize {
-    let mut game_count: usize = 0;
+fn exec_until_first_win(mut model: &mut Model, max_traials: usize) -> (usize, bool) {
+    let start_game_count = model.game_count;
+    let mut traial_count = start_game_count.clone();
+    let mut win = false;
 
     loop {
-        game_count += 1;
+        traial_count += 1;
 
-        if rand::thread_rng().gen_range(1, jackpot_probability+1) == rand::thread_rng().gen_range(1, jackpot_probability+1) {
+        if rand::thread_rng().gen_range(1, model.jackpot_probability+1) == rand::thread_rng().gen_range(1, model.jackpot_probability+1) {
+            model.game_count = 0;
+            win = true;
             break;
         }
 
-        if game_count >= MAX_TRAIAL {
-            return MAX_TRAIAL+1;
+        if traial_count >= start_game_count+max_traials {
+            model.game_count += max_traials;
+            break;
         }
     }
 
-    game_count
+    (traial_count, win)
 }
 
-fn exec_st_and_cal_pay_out_ball(mut model: &mut Model, game_counts_until_first_win: &Vec<usize>) -> f64 {
+fn exec_st_and_cal_pay_out_ball(mut model: &mut Model, game_counts_until_first_win: &Vec<(usize, bool)>, max_traials: usize) -> f64 {
     let mut total_balance: f64 = 0.0;
 
     // 大当たり & 確変集計
-    for game_count in game_counts_until_first_win {
+    for (game_count, win) in game_counts_until_first_win {
         let mut balance = 0.0;
-        // let mut st_game_count = 0;
         let mut pay_out_ball = 0.0;
-
-        // 大当たりに対する出玉(TODO 本当は確率によって違う)
-        pay_out_ball += 450.0;
-
         let mut st_game_counts = vec![];
-        // 確変に突入するかどうか
-        if (rand::thread_rng().gen_range(0, 101) as f64) < model.st_rush_percentage {
-            // 確変
-            st_game_counts.push(0);
-            let mut st_least = model.st_trials.clone();
 
-            loop {
-                if st_least <= 0 { break; }
-                if rand::thread_rng().gen_range(1, model.st_probability as usize) == rand::thread_rng().gen_range(1, model.st_probability as usize) {
-                    let st_trials = model.st_trials.clone();
-                    st_game_counts.push(st_trials - st_least);
-                    st_least = model.st_trials.clone();
-                    pay_out_ball += model.st_bonus as f64;
+        // 初当たり出玉
+        pay_out_ball += model.first_win_pay_out_ball;
+
+        // もし初当たりを引いていればSTに入るかの抽選が行われる
+        if *win {
+            if (rand::thread_rng().gen_range(0, 101) as f64) < model.st_rush_percentage {
+                // 確変
+                let mut st_least = model.st_trials.clone();
+
+                loop {
+                    if st_least <= 0 { break; }
+                    if rand::thread_rng().gen_range(1, model.st_probability as usize) == rand::thread_rng().gen_range(1, model.st_probability as usize) {
+                        let st_trials = model.st_trials.clone();
+                        st_game_counts.push(st_trials - st_least);
+                        st_least = model.st_trials.clone();
+                        pay_out_ball += model.st_expected_bonus as f64;
+                    }
+                    st_least -= 1;
                 }
-                st_least -= 1;
             }
         }
 
         // 出玉に金額を掛ける
         balance += pay_out_ball * model.price as f64;
-
-        // MAX_TRAIALを超えていたら強制的に勝ち分を0にしている
-        if game_count > &MAX_TRAIAL {
-            balance = 0.0;
-            st_game_counts = vec![];
-        }
 
         // 初当たりまでに使った金額
         balance -= model.roll_per_cost * (*game_count as f64);
@@ -150,13 +137,15 @@ fn exec_st_and_cal_pay_out_ball(mut model: &mut Model, game_counts_until_first_w
 
         total_balance += balance;
 
-        let mut jackpot_count: HashMap<String, Vec<usize>> = HashMap::new();
-        jackpot_count.insert(String::from("game_count"), vec![game_count.clone()]);
-        jackpot_count.insert(String::from("st_game_counts"), st_game_counts);
-        jackpot_count.insert(String::from("pay_out_ball"), vec![pay_out_ball as usize]);
-        match model.jackpot_counts {
-            Some(ref mut x) => x.push(jackpot_count),
-            None    => model.jackpot_counts = Some(vec![jackpot_count]),
+        if game_count < &max_traials {
+            let mut jackpot_count: HashMap<String, Vec<usize>> = HashMap::new();
+            jackpot_count.insert(String::from("game_count"), vec![game_count.clone()]);
+            jackpot_count.insert(String::from("st_game_counts"), st_game_counts);
+            jackpot_count.insert(String::from("pay_out_ball"), vec![pay_out_ball as usize]);
+            match model.jackpot_counts {
+                Some(ref mut x) => x.push(jackpot_count),
+                None    => model.jackpot_counts = Some(vec![jackpot_count]),
+            }
         }
     }
 
@@ -172,7 +161,6 @@ fn print_model_spec(model: &Model) {
 }
 
 fn print_with_color(color_int: usize, text: String) {
-    // TODO iikanzinisitene
     print!("\x1b[{}m{}\x1b[m", 30+color_int, text);
 }
 
@@ -192,10 +180,3 @@ fn print_machine_results(model: &Model) {
         );
     }
 }
-
-// TODO
-// ありえない条件として、自分1人、同じ台を打ち続ける、金額は無限
-// マルチスレッドで複数人が同時に打った場合でどうなるのかを検証しないと意味がない、その時行動モデルを選択できること、小遣いが切れたら帰ること
-// 台としての収益、回転数、出玉、とかも計測できて、本当に１日のホールが終わった感じを作りたい、本当に万発出す台があるのか
-// 養分、ハイエナ、回転重視、ランダム、どれがいいのだろうか
-// 回転数は正規分布するはず、回転できる人間の判断材料をより明確にしたい
